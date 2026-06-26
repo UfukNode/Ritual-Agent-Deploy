@@ -524,7 +524,7 @@ async function waitForReceipt(txHash) {
     const receipt = await rpcRequest("eth_getTransactionReceipt", [txHash]);
     if (receipt) {
       if (receipt.status !== "0x1") {
-        throw new Error(`Transaction failed: ${txHash}`);
+        return receipt;
       }
       return receipt;
     }
@@ -533,12 +533,54 @@ async function waitForReceipt(txHash) {
   throw new Error(`Timed out waiting for transaction: ${txHash}`);
 }
 
+function formatGasHex(value) {
+  if (!value) {
+    return "";
+  }
+  try {
+    return hexToBigInt(value).toString();
+  } catch {
+    return String(value);
+  }
+}
+
+async function describeFailedTransaction(txHash, tx, receipt) {
+  const details = [];
+  const gasUsed = formatGasHex(receipt?.gasUsed);
+  const gasLimit = formatGasHex(tx?.gas);
+
+  if (gasUsed) {
+    details.push(`gas used ${gasUsed}${gasLimit ? ` / ${gasLimit}` : ""}`);
+  }
+
+  if (gasUsed && gasLimit && gasUsed === gasLimit) {
+    details.push("likely out of gas");
+  }
+
+  try {
+    await rpcRequest("eth_call", [tx, receipt?.blockNumber || "latest"]);
+  } catch (error) {
+    const reason = error?.message || String(error);
+    if (reason && !details.some((item) => item.includes(reason))) {
+      details.push(reason);
+    }
+  }
+
+  return details.length ? `Failure details: ${details.join(" | ")}` : "";
+}
+
 async function sendTransaction(label, tx) {
   const item = logActivity(label, "Waiting for wallet confirmation");
   const ritualTx = await withRitualGas(tx);
   const txHash = await walletRequest("eth_sendTransaction", [ritualTx]);
   updateActivity(item, label, txHash);
-  await waitForReceipt(txHash);
+  const receipt = await waitForReceipt(txHash);
+  if (receipt.status !== "0x1") {
+    const details = await describeFailedTransaction(txHash, ritualTx, receipt);
+    const message = details ? `${label} failed: ${txHash}\n${details}` : `${label} failed: ${txHash}`;
+    updateActivity(item, `${label} failed`, details || txHash);
+    throw new Error(message);
+  }
   updateActivity(item, `${label} confirmed`, txHash);
   return txHash;
 }
