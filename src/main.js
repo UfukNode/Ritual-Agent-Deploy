@@ -18,6 +18,7 @@ import {
   RITUAL_WALLET_ABI,
   RITUAL_WALLET_ADDRESS,
 } from "./abis.js";
+import { encryptRitualEnv } from "./crypto.js";
 
 const RITUAL_CHAIN = {
   id: 1979,
@@ -31,6 +32,7 @@ const DELIVERY_SELECTOR = keccak256(new TextEncoder().encode("onSovereignAgentRe
 const SCHED_GAS = 5_000_000n;
 const DEPLOY_GAS = 3_500_000n;
 const STOP_GAS = 3_500_000n;
+const DEFAULT_ENV_PAYLOAD = new TextEncoder().encode('{"LLM_PROVIDER":"ritual"}');
 
 const state = {
   account: "",
@@ -179,14 +181,27 @@ async function withRitualGas(tx) {
 }
 
 function getConfig() {
+  const prompt = elements.promptInput.value.trim();
+  const model = elements.modelInput.value.trim();
   const salt = elements.saltInput.value.trim();
 
+  if (!prompt) {
+    throw new Error("Prompt is required.");
+  }
+  if (!model) {
+    throw new Error("Model is required.");
+  }
   if (!salt) {
     throw new Error("Salt is required.");
   }
 
   return {
+    prompt,
+    model,
     salt,
+    depositWei: parseNativeInput(elements.depositInput.value, "Deposit"),
+    cliType: Number.parseInt(elements.cliTypeInput.value, 10),
+    lockBlocks: parsePositiveBigInt(elements.lockBlocksInput.value, "Lock blocks"),
   };
 }
 
@@ -460,6 +475,50 @@ async function discoverExecutor() {
   return { executor, publicKey };
 }
 
+async function buildConfigureCallData(harness, config) {
+  const { executor, publicKey } = await discoverExecutor();
+  const blockNumber = hexToBigInt(await rpcRequest("eth_blockNumber"));
+  const encryptedEnv = await encryptRitualEnv(publicKey, DEFAULT_ENV_PAYLOAD);
+  const maxPollBlock = blockNumber + 10_000_000n;
+
+  const params = [
+    executor,
+    500n,
+    "0x",
+    5n,
+    maxPollBlock,
+    "SOVEREIGN_AGENT_TASK",
+    harness,
+    DELIVERY_SELECTOR,
+    3_000_000n,
+    1_000_000_000n,
+    100_000_000n,
+    config.cliType,
+    config.prompt,
+    encryptedEnv,
+    ["", "", ""],
+    ["", "", ""],
+    [],
+    ["", "", ""],
+    config.model,
+    [],
+    5,
+    2048,
+    "",
+  ];
+  const schedule = [800_000, 180, 500, 1_000_000_000n, 100_000_000n, 0n];
+  const rolling = [1, 5000, 1];
+
+  return {
+    executor,
+    calldata: encodeFunctionData({
+      abi: HARNESS_ABI,
+      functionName: "configureFundAndStart",
+      args: [params, schedule, rolling, config.lockBlocks],
+    }),
+  };
+}
+
 async function waitForReceipt(txHash) {
   for (let attempt = 0; attempt < 90; attempt += 1) {
     const receipt = await rpcRequest("eth_getTransactionReceipt", [txHash]);
@@ -532,14 +591,22 @@ async function deployAndArm() {
   try {
     const preview = await previewAgent({ silent: true });
     if (!preview) return;
-    const { harness, saltHash } = preview;
+    const { harness, saltHash, config } = preview;
+
+    if (state.balanceWei < config.depositWei) {
+      throw new Error("Wallet balance is below the configured deposit.");
+    }
 
     const ok = window.confirm(
-      `Deploy this Ritual agent?\n\nHarness: ${harness}`,
+      `Deploy and arm this Ritual agent?\n\nHarness: ${harness}\nDeposit: ${formatRitual(config.depositWei)}`,
     );
     if (!ok) {
       return;
     }
+
+    const buildItem = logActivity("Build request", "Discovering executor and encoding calldata");
+    const { calldata, executor } = await buildConfigureCallData(harness, config);
+    updateActivity(buildItem, "Build request ready", executor);
 
     const code = await getCode(harness);
     if (!code || code === "0x") {
@@ -558,9 +625,29 @@ async function deployAndArm() {
       logActivity("Deploy harness", "Already on-chain");
     }
 
+    const simulateItem = logActivity("Simulate configure", "eth_call");
+    await rpcRequest("eth_call", [
+      {
+        from: state.account,
+        to: harness,
+        data: calldata,
+        value: quantity(config.depositWei),
+        gas: quantity(SCHED_GAS),
+      },
+      "latest",
+    ]);
+    updateActivity(simulateItem, "Simulation passed", harness);
+
+    await sendTransaction("Fund and arm", {
+      from: state.account,
+      to: harness,
+      data: calldata,
+      value: quantity(config.depositWei),
+      gas: quantity(SCHED_GAS),
+    });
+
     await refreshWalletState();
     await previewAgent({ silent: true });
-    logActivity("Deploy complete", harness);
   } finally {
     setBusy(false);
   }

@@ -83,15 +83,13 @@ For GitHub Pages, use branch publishing:
 3. Use **Faucet** if the wallet needs test RITUAL.
 4. Fill in the prompt, model, salt, deposit, and lock blocks.
 5. Click **Preview** to calculate the deterministic agent address.
-6. Click **Deploy Agent** and confirm the wallet transaction.
+6. Click **Deploy + Arm** and confirm the wallet transactions.
 7. Use **Agents -> Scan by Salt** with the same salt to find deployed agents later.
 8. If you already have the agent address, paste it into **Agent address** and click **Check Address**.
 
 To deploy a second agent, change `Salt` first. A different salt produces a different deterministic agent address.
 
 `Scan by Salt` does not search every historical wallet transaction. It predicts deterministic agent addresses from the connected wallet and the salt value. If the original salt is unknown, use the direct address check.
-
-This app now keeps the deploy path to a single contract creation transaction. The earlier combined fund-and-arm flow was removed because it could revert on-chain even after a successful simulation.
 
 ## Check Your Agent
 
