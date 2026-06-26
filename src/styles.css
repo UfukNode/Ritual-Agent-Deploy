@@ -492,6 +492,25 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.agent-tools,
+.agent-actions {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.agent-tools {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-tools .input-row {
+  margin: 0;
+}
+
+.agent-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .agent-list {
   display: grid;
   gap: 8px;
@@ -591,6 +610,8 @@ h1 {
   .status-grid,
   .form-grid,
   .action-grid,
+  .agent-tools,
+  .agent-actions,
   .agent-row {
     grid-template-columns: 1fr;
   }

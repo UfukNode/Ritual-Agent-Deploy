@@ -84,9 +84,12 @@ For GitHub Pages, use branch publishing:
 4. Fill in the prompt, model, salt, deposit, and lock blocks.
 5. Click **Preview** to calculate the deterministic agent address.
 6. Click **Deploy + Arm** and confirm the wallet transactions.
-7. Use **Agents -> Scan** to find deployed agents later.
+7. Use **Agents -> Scan by Salt** with the same salt to find deployed agents later.
+8. If you already have the agent address, paste it into **Agent address** and click **Check Address**.
 
 To deploy a second agent, change `Salt` first. A different salt produces a different deterministic agent address.
+
+`Scan by Salt` does not search every historical wallet transaction. It predicts deterministic agent addresses from the connected wallet and the salt value. If the original salt is unknown, use the direct address check.
 
 ## Check Your Agent
 

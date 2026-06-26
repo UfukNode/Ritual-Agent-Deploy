@@ -6,8 +6,8 @@
     <title>Ritual Agent Builder</title>
     <link rel="icon" href="./assets/ritual-mark-1789d448.svg" />
     
-    <script type="module" crossorigin src="./assets/index-b9b1e4b7.js"></script>
-    <link rel="stylesheet" href="./assets/index-20741eda.css">
+    <script type="module" crossorigin src="./assets/index-0170c75e.js"></script>
+    <link rel="stylesheet" href="./assets/index-fcf0b72c.css">
   </head>
   <body>
     <main class="app-shell">
@@ -175,7 +175,23 @@
                 <p class="eyebrow">Agents</p>
                 <h2 id="agentsTitle">Wallet Deployments</h2>
               </div>
-              <button class="secondary-button compact-button" id="scanButton" type="button">Scan</button>
+            </div>
+
+            <div class="agent-tools">
+              <label class="input-row" for="scanSaltInput">
+                <span>Scan salt</span>
+                <input id="scanSaltInput" type="text" placeholder="your-agent-name" />
+              </label>
+
+              <label class="input-row" for="agentLookupInput">
+                <span>Agent address</span>
+                <input id="agentLookupInput" type="text" placeholder="0x..." />
+              </label>
+            </div>
+
+            <div class="agent-actions">
+              <button class="secondary-button" id="scanButton" type="button">Scan by Salt</button>
+              <button class="primary-button" id="lookupAgentButton" type="button">Check Address</button>
             </div>
 
             <div class="agent-list" id="agentsList" aria-live="polite"></div>

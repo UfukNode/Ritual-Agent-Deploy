@@ -50,6 +50,7 @@ const state = {
 
 const elements = {
   activityLog: document.querySelector("#activityLog"),
+  agentLookupInput: document.querySelector("#agentLookupInput"),
   agentBalance: document.querySelector("#agentBalance"),
   agentState: document.querySelector("#agentState"),
   agentsList: document.querySelector("#agentsList"),
@@ -63,6 +64,7 @@ const elements = {
   harnessAddress: document.querySelector("#harnessAddress"),
   lockBlocksInput: document.querySelector("#lockBlocksInput"),
   lockUntilValue: document.querySelector("#lockUntilValue"),
+  lookupAgentButton: document.querySelector("#lookupAgentButton"),
   modelInput: document.querySelector("#modelInput"),
   networkStatus: document.querySelector("#networkStatus"),
   previewButton: document.querySelector("#previewButton"),
@@ -71,6 +73,7 @@ const elements = {
   restartButton: document.querySelector("#restartButton"),
   saltInput: document.querySelector("#saltInput"),
   scanButton: document.querySelector("#scanButton"),
+  scanSaltInput: document.querySelector("#scanSaltInput"),
   stopButton: document.querySelector("#stopButton"),
   targetAgentInput: document.querySelector("#targetAgentInput"),
   toolPanels: document.querySelectorAll("[data-tool-panel]"),
@@ -207,6 +210,8 @@ function saveSettings() {
     prompt: elements.promptInput.value,
     model: elements.modelInput.value,
     salt: elements.saltInput.value,
+    scanSalt: elements.scanSaltInput.value,
+    agentAddress: elements.agentLookupInput.value,
     deposit: elements.depositInput.value,
     lockBlocks: elements.lockBlocksInput.value,
     topup: elements.topupInput.value,
@@ -220,6 +225,8 @@ function loadSettings() {
     if (settings.prompt) elements.promptInput.value = settings.prompt;
     if (settings.model) elements.modelInput.value = settings.model;
     if (settings.salt) elements.saltInput.value = settings.salt;
+    if (settings.scanSalt) elements.scanSaltInput.value = settings.scanSalt;
+    if (settings.agentAddress) elements.agentLookupInput.value = settings.agentAddress;
     if (settings.deposit) elements.depositInput.value = settings.deposit;
     if (settings.lockBlocks) elements.lockBlocksInput.value = settings.lockBlocks;
     if (settings.topup) elements.topupInput.value = settings.topup;
@@ -280,6 +287,7 @@ async function disconnectWallet() {
   state.saltHash = "";
   state.agent = null;
   state.agents = [];
+  elements.agentLookupInput.value = "";
   elements.targetAgentInput.value = "";
   logActivity("Wallet disconnected", "Local session cleared");
   render();
@@ -410,6 +418,9 @@ async function previewAgent({ silent = false } = {}) {
   }
 
   const config = getConfig();
+  if (!elements.scanSaltInput.value.trim()) {
+    elements.scanSaltInput.value = config.salt;
+  }
   saveSettings();
   const predicted = await predictHarness(state.account, config.salt);
   state.harness = predicted.harness;
@@ -718,9 +729,16 @@ async function scanAgents() {
   await ensureReady();
   setBusy(true);
   try {
-    const config = getConfig();
+    const initialSalt = elements.scanSaltInput.value.trim() || elements.saltInput.value.trim();
+    if (!initialSalt) {
+      throw new Error("Scan salt is required.");
+    }
+
+    elements.scanSaltInput.value = initialSalt;
+    saveSettings();
+
     const agents = [];
-    let salt = config.salt;
+    let salt = initialSalt;
     let misses = 0;
     while (misses < 2 && agents.length < 100) {
       const { harness } = await predictHarness(state.account, salt);
@@ -738,8 +756,38 @@ async function scanAgents() {
     }
 
     state.agents = agents;
-    renderAgents();
+    if (agents.length) {
+      state.agent = agents[0];
+      state.harness = agents[0].address;
+      elements.targetAgentInput.value = agents[0].address;
+      elements.agentLookupInput.value = agents[0].address;
+      saveSettings();
+    }
+    render();
     logActivity("Scan complete", `${agents.length} agent(s)`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function lookupAgent() {
+  await ensureReady();
+  setBusy(true);
+  try {
+    const target = elements.agentLookupInput.value.trim() || elements.targetAgentInput.value.trim() || state.harness;
+    if (!isAddress(target)) {
+      throw new Error("Agent address is invalid.");
+    }
+
+    const agent = await fetchAgent(target);
+    elements.agentLookupInput.value = agent.address;
+    elements.targetAgentInput.value = agent.address;
+    state.agent = agent;
+    state.harness = agent.address;
+    state.agents = agent.exists ? [{ ...agent, salt: "Manual address" }] : [];
+    saveSettings();
+    render();
+    logActivity(agent.exists ? "Agent found" : "No agent contract", agent.address);
   } finally {
     setBusy(false);
   }
@@ -822,6 +870,7 @@ function render() {
   elements.restartButton.disabled = actionDisabled || !connected;
   elements.stopButton.disabled = actionDisabled || !connected;
   elements.scanButton.disabled = actionDisabled || !connected;
+  elements.lookupAgentButton.disabled = actionDisabled || !connected;
 
   renderActiveTool();
   renderAgent();
@@ -905,6 +954,14 @@ function bindUi() {
     }
   });
 
+  elements.lookupAgentButton.addEventListener("click", async () => {
+    try {
+      await lookupAgent();
+    } catch (error) {
+      showError(error);
+    }
+  });
+
   elements.toolTabs.forEach((button) => {
     button.addEventListener("click", () => {
       state.activeTool = button.dataset.toolTab;
@@ -916,6 +973,8 @@ function bindUi() {
     elements.promptInput,
     elements.modelInput,
     elements.saltInput,
+    elements.scanSaltInput,
+    elements.agentLookupInput,
     elements.depositInput,
     elements.lockBlocksInput,
     elements.topupInput,
