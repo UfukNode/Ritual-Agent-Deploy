@@ -29,9 +29,11 @@ const RITUAL_CHAIN = {
 };
 
 const DELIVERY_SELECTOR = keccak256(new TextEncoder().encode("onSovereignAgentResult(bytes32,bytes)")).slice(0, 10);
+const EXPLORER_ADDRESS_BASE = "https://explorer.ritualfoundation.org/address";
 const SCHED_GAS = 5_000_000n;
 const DEPLOY_GAS = 3_500_000n;
 const STOP_GAS = 3_500_000n;
+const MIN_AGENT_DEPOSIT = parseEther("0.015");
 const DEFAULT_ENV_PAYLOAD = new TextEncoder().encode('{"LLM_PROVIDER":"ritual"}');
 
 const state = {
@@ -142,6 +144,14 @@ function shortAddress(address) {
   return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "-";
 }
 
+function explorerAddressUrl(address) {
+  return `${EXPLORER_ADDRESS_BASE}/${getAddress(address)}`;
+}
+
+function openExplorerAddress(address) {
+  window.open(explorerAddressUrl(address), "_blank", "noreferrer");
+}
+
 function formatRitual(wei, precision = 5) {
   const [whole, fraction = ""] = formatEther(wei).split(".");
   const trimmed = fraction.slice(0, precision).replace(/0+$/, "");
@@ -184,6 +194,7 @@ function getConfig() {
   const prompt = elements.promptInput.value.trim();
   const model = elements.modelInput.value.trim();
   const salt = elements.saltInput.value.trim();
+  const depositWei = parseNativeInput(elements.depositInput.value, "Deposit");
 
   if (!prompt) {
     throw new Error("Prompt is required.");
@@ -194,12 +205,15 @@ function getConfig() {
   if (!salt) {
     throw new Error("Salt is required.");
   }
+  if (depositWei < MIN_AGENT_DEPOSIT) {
+    throw new Error("Deposit must be at least 0.015 RITUAL.");
+  }
 
   return {
     prompt,
     model,
     salt,
-    depositWei: parseNativeInput(elements.depositInput.value, "Deposit"),
+    depositWei,
     cliType: Number.parseInt(elements.cliTypeInput.value, 10),
     lockBlocks: parsePositiveBigInt(elements.lockBlocksInput.value, "Lock blocks"),
   };
@@ -591,10 +605,14 @@ async function deployAndArm() {
   try {
     const preview = await previewAgent({ silent: true });
     if (!preview) return;
-    const { harness, saltHash, config } = preview;
+    const { harness, saltHash, config, agent } = preview;
 
     if (state.balanceWei < config.depositWei) {
       throw new Error("Wallet balance is below the configured deposit.");
+    }
+    if (agent?.exists && agent.configured) {
+      logActivity("Deploy skipped", "Agent already configured");
+      return;
     }
 
     const ok = window.confirm(
@@ -821,6 +839,7 @@ async function lookupAgent() {
       throw new Error("Agent address is invalid.");
     }
 
+    openExplorerAddress(target);
     const agent = await fetchAgent(target);
     elements.agentLookupInput.value = agent.address;
     elements.targetAgentInput.value = agent.address;
@@ -860,11 +879,7 @@ function renderAgents() {
     item.querySelector('[data-role="state"]').textContent = getAgentStateLabel(agent);
     item.querySelector('[data-role="balance"]').textContent = formatRitual(agent.balanceWei, 4);
     item.addEventListener("click", () => {
-      state.agent = agent;
-      state.harness = agent.address;
-      elements.targetAgentInput.value = agent.address;
-      state.activeTool = "manage";
-      render();
+      openExplorerAddress(agent.address);
     });
     elements.agentsList.append(item);
   });

@@ -3,7 +3,6 @@
 Static wallet dapp for deploying and managing Ritual sovereign agents on Ritual testnet.
 
 - **Deploy:** create a sovereign agent, fund it, and arm it from the connected wallet.
-- **Manage:** refresh, top up, restart, or stop an existing agent.
 - **Agents:** scan deterministic agent slots for the connected wallet.
 - **Faucet:** open the official Ritual faucet for test RITUAL.
 
@@ -85,11 +84,13 @@ For GitHub Pages, use branch publishing:
 5. Click **Preview** to calculate the deterministic agent address.
 6. Click **Deploy + Arm** and confirm the wallet transactions.
 7. Use **Agents -> Scan by Salt** with the same salt to find deployed agents later.
-8. If you already have the agent address, paste it into **Agent address** and click **Check Address**.
+8. If you already have the agent address, paste it into **Agent address** and click **Open Explorer**.
 
 To deploy a second agent, change `Salt` first. A different salt produces a different deterministic agent address.
 
 `Scan by Salt` does not search every historical wallet transaction. It predicts deterministic agent addresses from the connected wallet and the salt value. If the original salt is unknown, use the direct address check.
+
+Agent rows are clickable and open the Ritual explorer directly.
 
 ## Check Your Agent
 
